@@ -1,0 +1,158 @@
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model tenants {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String
+  slug             String    @unique
+  domain           String?
+  logo_url         String?
+  primary_color    String?
+  secondary_color  String?
+  accent_color     String?
+  background_color String?
+  text_color       String?
+  is_active        Boolean   @default(true)
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime  @default(now()) @db.Timestamptz(6)
+
+  users            users[]
+  stores           stores[]
+  categories       categories[]
+  products         products[]
+  offers           offers[]
+  csv_imports      csv_imports[]
+  media_assets     media_assets[]
+}
+
+model users {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id     String?  @db.Uuid
+  name          String
+  email         String
+  password_hash String
+  role          String   @default("admin")
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant        tenants? @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, email])
+}
+
+model stores {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id  String   @db.Uuid
+  name       String
+  slug       String
+  city       String?
+  state      String?
+  address    String?
+  phone      String?
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant     tenants  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  offers     offers[]
+
+  @@unique([tenant_id, slug])
+}
+
+model categories {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id  String   @db.Uuid
+  name       String
+  slug       String
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant     tenants  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  products   products[]
+
+  @@unique([tenant_id, slug])
+}
+
+model products {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id     String   @db.Uuid
+  category_id   String?  @db.Uuid
+  internal_code String?
+  barcode       String?
+  name          String
+  description   String?
+  image_url     String?
+  unit          String?
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant        tenants      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  category      categories?  @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  offers        offers[]
+
+  @@unique([tenant_id, internal_code])
+  @@unique([tenant_id, barcode])
+}
+
+model offers {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id   String   @db.Uuid
+  store_id    String?  @db.Uuid
+  product_id  String   @db.Uuid
+  price_from  Decimal? @db.Decimal(10, 2)
+  price_to    Decimal  @db.Decimal(10, 2)
+  starts_at   DateTime? @db.Date
+  ends_at     DateTime? @db.Date
+  is_featured Boolean  @default(false)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant      tenants  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  store       stores?  @relation(fields: [store_id], references: [id], onDelete: Cascade)
+  product     products @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@index([product_id])
+  @@index([store_id])
+}
+
+model csv_imports {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id    String    @db.Uuid
+  store_id     String?   @db.Uuid
+  file_url     String
+  status       String    @default("pending")
+  total_rows   Int?      @default(0)
+  valid_rows   Int?      @default(0)
+  invalid_rows Int?      @default(0)
+  warnings     Json?     @default("[]")
+  errors       Json?     @default("[]")
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  processed_at DateTime? @db.Timestamptz(6)
+
+  tenant       tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+}
+
+model media_assets {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id      String   @db.Uuid
+  asset_type     String
+  file_url       String
+  reference_code String?
+  barcode        String?
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant         tenants  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+}
