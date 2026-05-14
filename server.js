@@ -1,28 +1,22 @@
 const Fastify = require("fastify");
 const cors = require("@fastify/cors");
 const jwt = require("@fastify/jwt");
+const multipart = require("@fastify/multipart");
+const { parse } = require("csv-parse/sync");
 const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient();
 const app = Fastify({ logger: true });
 
-const multipart = require("@fastify/multipart");
-const { parse } = require("csv-parse/sync");
-
 app.register(cors);
 app.register(jwt, { secret: "supersecret" });
 app.register(multipart);
 
-/**
- * Middleware multi-tenant
- */
 app.addHook("preHandler", async (request, reply) => {
   const host = request.headers.host;
 
   const tenant = await prisma.tenants.findFirst({
-    where: {
-      domain: host
-    }
+    where: { domain: host }
   });
 
   if (!tenant) {
@@ -32,9 +26,6 @@ app.addHook("preHandler", async (request, reply) => {
   request.tenant = tenant;
 });
 
-/**
- * Rota teste
- */
 app.get("/", async (req) => {
   return {
     message: "API funcionando 🚀",
@@ -85,24 +76,56 @@ app.post("/imports/csv", async (req, reply) => {
 
   rows.forEach((row, index) => {
     const line = index + 2;
-
-    if (!row.internal_code && !row.barcode) {
-      errors.push({ line, message: "Produto sem código interno e sem código de barras" });
-    }
-
-    if (!row.name) {
-      errors.push({ line, message: "Produto sem nome" });
-    }
-
     const priceTo = Number(row.price_to);
     const priceFrom = Number(row.price_from);
 
+    if (!row.internal_code && !row.barcode) {
+      errors.push({
+        line,
+        message: "Produto sem código interno e sem código de barras"
+      });
+    }
+
+    if (!row.name) {
+      errors.push({
+        line,
+        message: "Produto sem nome"
+      });
+    }
+
     if (!priceTo || priceTo <= 0) {
-      errors.push({ line, message: "Preço promocional inválido" });
+      errors.push({
+        line,
+        message: "Preço promocional inválido"
+      });
+    }
+
+    if (row.price_to && String(row.price_to).includes(",")) {
+      warnings.push({
+        line,
+        message: "Preço com vírgula detectado. Use ponto decimal, exemplo: 19.90."
+      });
     }
 
     if (priceFrom && priceTo > priceFrom) {
-      warnings.push({ line, message: "Preço promocional maior que o preço original" });
+      warnings.push({
+        line,
+        message: "Preço promocional maior que o preço original"
+      });
+    }
+
+    if (priceFrom && priceTo < priceFrom * 0.4) {
+      warnings.push({
+        line,
+        message: "Preço promocional muito abaixo do preço original. Verifique possível erro de digitação."
+      });
+    }
+
+    if (priceFrom && priceTo === priceFrom) {
+      warnings.push({
+        line,
+        message: "Preço promocional igual ao preço original"
+      });
     }
   });
 
@@ -123,11 +146,20 @@ app.post("/imports/csv", async (req, reply) => {
     return reply.code(400).send({
       import_id: importRecord.id,
       status: "failed",
+      total_rows: rows.length,
+      valid_rows: rows.length - errors.length,
+      invalid_rows: errors.length,
+      warnings,
       errors
     });
   }
 
-  for (const row of rows) {
+  let importedRows = 0;
+  let skippedRows = 0;
+
+  for (const [index, row] of rows.entries()) {
+    const line = index + 2;
+
     const category = await prisma.categories.findFirst({
       where: {
         name: row.category,
@@ -166,46 +198,53 @@ app.post("/imports/csv", async (req, reply) => {
     });
 
     if (!store) {
+      skippedRows += 1;
+
+      warnings.push({
+        line,
+        message: `Loja não encontrada: ${row.store_slug}. Oferta ignorada.`
+      });
+
       continue;
     }
 
-const startsAt = row.starts_at ? new Date(row.starts_at) : null;
-const endsAt = row.ends_at ? new Date(row.ends_at) : null;
+    const startsAt = row.starts_at ? new Date(row.starts_at) : null;
+    const endsAt = row.ends_at ? new Date(row.ends_at) : null;
 
-const existingOffer = await prisma.offers.findFirst({
-  where: {
-    tenant_id: req.tenant.id,
-    store_id: store.id,
-    product_id: product.id,
-    starts_at: startsAt,
-    ends_at: endsAt
-  }
-});
+    const existingOffer = await prisma.offers.findFirst({
+      where: {
+        tenant_id: req.tenant.id,
+        store_id: store.id,
+        product_id: product.id,
+        starts_at: startsAt,
+        ends_at: endsAt
+      }
+    });
 
-const offerData = {
-  tenant_id: req.tenant.id,
-  store_id: store.id,
-  product_id: product.id,
-  price_from: row.price_from ? Number(row.price_from) : null,
-  price_to: Number(row.price_to),
-  starts_at: startsAt,
-  ends_at: endsAt,
-  is_featured: row.is_featured === "true",
-  is_active: true
-};
+    const offerData = {
+      tenant_id: req.tenant.id,
+      store_id: store.id,
+      product_id: product.id,
+      price_from: row.price_from ? Number(row.price_from) : null,
+      price_to: Number(row.price_to),
+      starts_at: startsAt,
+      ends_at: endsAt,
+      is_featured: row.is_featured === "true",
+      is_active: true
+    };
 
-if (existingOffer) {
-  await prisma.offers.update({
-    where: {
-      id: existingOffer.id
-    },
-    data: offerData
-  });
-} else {
-  await prisma.offers.create({
-    data: offerData
-  });
-}    
+    if (existingOffer) {
+      await prisma.offers.update({
+        where: { id: existingOffer.id },
+        data: offerData
+      });
+    } else {
+      await prisma.offers.create({
+        data: offerData
+      });
+    }
+
+    importedRows += 1;
   }
 
   const importRecord = await prisma.csv_imports.create({
@@ -214,8 +253,8 @@ if (existingOffer) {
       file_url: file.filename,
       status: "imported",
       total_rows: rows.length,
-      valid_rows: rows.length,
-      invalid_rows: 0,
+      valid_rows: importedRows,
+      invalid_rows: skippedRows,
       warnings,
       errors
     }
@@ -225,8 +264,9 @@ if (existingOffer) {
     import_id: importRecord.id,
     status: "imported",
     total_rows: rows.length,
-    valid_rows: rows.length,
-    invalid_rows: 0,
+    valid_rows: importedRows,
+    skipped_rows: skippedRows,
+    invalid_rows: skippedRows,
     warnings,
     errors
   };
