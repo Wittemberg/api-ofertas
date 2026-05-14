@@ -1,21 +1,15 @@
-version: "3.7"
+version: "3.8"
 
 services:
   api:
     image: ghcr.io/wittemberg/api-ofertas:latest
-
-    environment:
-  DATABASE_URL: "postgresql://ofertas_app:Cv%23rZs1iSk3Rq2b%26@postgres:5432/ofertas_saas"
     networks:
-      - interna
-
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`api-ofertas.wrtec.com.br`)"
-      - "traefik.http.routers.api.entrypoints=websecure"
-      - "traefik.http.routers.api.tls.certresolver=letsencryptresolver"
-      - "traefik.http.services.api.loadbalancer.server.port=3000"
+      - orion_network
+    environment:
+      DATABASE_URL: "postgresql://ofertas_app:Cv%23rZs1iSk3Rq2b%26@postgres:5432/ofertas_saas"
+    deploy:
+      replicas: 1
 
 networks:
-  interna:
+  orion_network:
     external: true
