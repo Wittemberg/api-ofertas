@@ -169,18 +169,43 @@ app.post("/imports/csv", async (req, reply) => {
       continue;
     }
 
-    await prisma.offers.create({
-      data: {
-        tenant_id: req.tenant.id,
-        store_id: store.id,
-        product_id: product.id,
-        price_from: row.price_from ? Number(row.price_from) : null,
-        price_to: Number(row.price_to),
-        starts_at: row.starts_at ? new Date(row.starts_at) : null,
-        ends_at: row.ends_at ? new Date(row.ends_at) : null,
-        is_featured: row.is_featured === "true"
-      }
-    });
+const startsAt = row.starts_at ? new Date(row.starts_at) : null;
+const endsAt = row.ends_at ? new Date(row.ends_at) : null;
+
+const existingOffer = await prisma.offers.findFirst({
+  where: {
+    tenant_id: req.tenant.id,
+    store_id: store.id,
+    product_id: product.id,
+    starts_at: startsAt,
+    ends_at: endsAt
+  }
+});
+
+const offerData = {
+  tenant_id: req.tenant.id,
+  store_id: store.id,
+  product_id: product.id,
+  price_from: row.price_from ? Number(row.price_from) : null,
+  price_to: Number(row.price_to),
+  starts_at: startsAt,
+  ends_at: endsAt,
+  is_featured: row.is_featured === "true",
+  is_active: true
+};
+
+if (existingOffer) {
+  await prisma.offers.update({
+    where: {
+      id: existingOffer.id
+    },
+    data: offerData
+  });
+} else {
+  await prisma.offers.create({
+    data: offerData
+  });
+}    
   }
 
   const importRecord = await prisma.csv_imports.create({
