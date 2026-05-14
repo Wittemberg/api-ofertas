@@ -38,6 +38,28 @@ app.get("/", async (req) => {
   };
 });
 
+app.get("/offers", async (req) => {
+  const offers = await prisma.offers.findMany({
+    where: {
+      tenant_id: req.tenant.id,
+      is_active: true
+    },
+    include: {
+      product: true,
+      store: true
+    },
+    orderBy: {
+      created_at: "desc"
+    }
+  });
+
+  return {
+    tenant: req.tenant.name,
+    total: offers.length,
+    offers
+  };
+});
+
 app.listen({ port: 3000, host: "0.0.0.0" }, (err) => {
   if (err) {
     console.error(err);
