@@ -4,12 +4,12 @@ services:
   api:
     image: ghcr.io/wittemberg/api-ofertas:latest
     networks:
-      - orion_network
+      - interna
     environment:
       DATABASE_URL: "postgresql://ofertas_app:Cv%23rZs1iSk3Rq2b%26@postgres:5432/ofertas_saas"
     deploy:
       replicas: 1
 
 networks:
-  orion_network:
+  interna:
     external: true
