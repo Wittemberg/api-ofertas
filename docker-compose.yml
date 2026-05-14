@@ -5,8 +5,7 @@ services:
     image: ghcr.io/wittemberg/api-ofertas:latest
 
     environment:
-     - DATABASE_URL="postgresql://ofertas_app:Cv#rZs1iSk3Rq2b&@postgres:5432/ofertas_saas"
-
+  DATABASE_URL: "postgresql://ofertas_app:Cv%23rZs1iSk3Rq2b%26@postgres:5432/ofertas_saas"
     networks:
       - interna
 
