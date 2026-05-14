@@ -30,3 +30,7 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/wittemberg/api-ofertas:latest
+
+      - name: 🔄 Forçar redeploy no Portainer
+        run: |
+          curl -X POST ${{ secrets.PORTAINER_WEBHOOK_URL }}
