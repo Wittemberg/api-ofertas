@@ -87,45 +87,110 @@ app.post("/imports/csv", async (req, reply) => {
     const line = index + 2;
 
     if (!row.internal_code && !row.barcode) {
-      errors.push({
-        line,
-        message: "Produto sem código interno e sem código de barras"
-      });
+      errors.push({ line, message: "Produto sem código interno e sem código de barras" });
     }
 
     if (!row.name) {
-      errors.push({
-        line,
-        message: "Produto sem nome"
-      });
+      errors.push({ line, message: "Produto sem nome" });
     }
 
     const priceTo = Number(row.price_to);
     const priceFrom = Number(row.price_from);
 
     if (!priceTo || priceTo <= 0) {
-      errors.push({
-        line,
-        message: "Preço promocional inválido"
-      });
+      errors.push({ line, message: "Preço promocional inválido" });
     }
 
     if (priceFrom && priceTo > priceFrom) {
-      warnings.push({
-        line,
-        message: "Preço promocional maior que o preço original"
-      });
+      warnings.push({ line, message: "Preço promocional maior que o preço original" });
     }
   });
+
+  if (errors.length) {
+    const importRecord = await prisma.csv_imports.create({
+      data: {
+        tenant_id: req.tenant.id,
+        file_url: file.filename,
+        status: "failed",
+        total_rows: rows.length,
+        valid_rows: rows.length - errors.length,
+        invalid_rows: errors.length,
+        warnings,
+        errors
+      }
+    });
+
+    return reply.code(400).send({
+      import_id: importRecord.id,
+      status: "failed",
+      errors
+    });
+  }
+
+  for (const row of rows) {
+    const category = await prisma.categories.findFirst({
+      where: {
+        name: row.category,
+        tenant_id: req.tenant.id
+      }
+    });
+
+    let product = await prisma.products.findFirst({
+      where: {
+        tenant_id: req.tenant.id,
+        OR: [
+          { internal_code: row.internal_code || undefined },
+          { barcode: row.barcode || undefined }
+        ]
+      }
+    });
+
+    if (!product) {
+      product = await prisma.products.create({
+        data: {
+          tenant_id: req.tenant.id,
+          category_id: category?.id,
+          name: row.name,
+          internal_code: row.internal_code || null,
+          barcode: row.barcode || null,
+          unit: row.unit || "UN"
+        }
+      });
+    }
+
+    const store = await prisma.stores.findFirst({
+      where: {
+        slug: row.store_slug,
+        tenant_id: req.tenant.id
+      }
+    });
+
+    if (!store) {
+      continue;
+    }
+
+    await prisma.offers.create({
+      data: {
+        tenant_id: req.tenant.id,
+        store_id: store.id,
+        product_id: product.id,
+        price_from: row.price_from ? Number(row.price_from) : null,
+        price_to: Number(row.price_to),
+        starts_at: row.starts_at ? new Date(row.starts_at) : null,
+        ends_at: row.ends_at ? new Date(row.ends_at) : null,
+        is_featured: row.is_featured === "true"
+      }
+    });
+  }
 
   const importRecord = await prisma.csv_imports.create({
     data: {
       tenant_id: req.tenant.id,
       file_url: file.filename,
-      status: errors.length ? "failed" : "validated",
+      status: "imported",
       total_rows: rows.length,
-      valid_rows: rows.length - errors.length,
-      invalid_rows: errors.length,
+      valid_rows: rows.length,
+      invalid_rows: 0,
       warnings,
       errors
     }
@@ -133,10 +198,10 @@ app.post("/imports/csv", async (req, reply) => {
 
   return {
     import_id: importRecord.id,
-    status: importRecord.status,
+    status: "imported",
     total_rows: rows.length,
-    valid_rows: importRecord.valid_rows,
-    invalid_rows: importRecord.invalid_rows,
+    valid_rows: rows.length,
+    invalid_rows: 0,
     warnings,
     errors
   };
