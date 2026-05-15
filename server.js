@@ -3,33 +3,27 @@ const cors = require("@fastify/cors");
 const jwt = require("@fastify/jwt");
 const multipart = require("@fastify/multipart");
 const { parse } = require("csv-parse/sync");
-const { PrismaClient } = require("@prisma/client");
+const { prisma } = require("./prisma");
 
-const prisma = new PrismaClient();
 const app = Fastify({ logger: true });
 
 app.register(cors);
-// app.register(jwt, { secret: "supersecret" });
 app.register(jwt, { secret: process.env.JWT_SECRET || 'super-secret-key-change-in-production' });
 app.register(multipart);
-  // Auth
-  app.register(require('./routes/auth'), { prefix: '/auth' });
-  // Products
-  app.register(require('./routes/products'), { prefix: '/products' });
-  // Stores
-  app.register(require('./routes/stores'), { prefix: '/stores' });
+
+// Route modules
+app.register(require('./routes/auth'), { prefix: '/auth' });
+app.register(require('./routes/products'), { prefix: '/products' });
+app.register(require('./routes/stores'), { prefix: '/stores' });
 
 app.addHook("preHandler", async (request, reply) => {
   const host = request.headers.host;
-
   const tenant = await prisma.tenants.findFirst({
     where: { domain: host }
   });
-
   if (!tenant) {
     return reply.code(404).send({ error: "Tenant não encontrado" });
   }
-
   request.tenant = tenant;
 });
 
@@ -42,29 +36,15 @@ app.get("/", async (req) => {
 
 app.get("/offers", async (req) => {
   const offers = await prisma.offers.findMany({
-    where: {
-      tenant_id: req.tenant.id,
-      is_active: true
-    },
-    include: {
-      product: true,
-      store: true
-    },
-    orderBy: {
-      created_at: "desc"
-    }
+    where: { tenant_id: req.tenant.id, is_active: true },
+    include: { product: true, store: true },
+    orderBy: { created_at: "desc" }
   });
-
-  return {
-    tenant: req.tenant.name,
-    total: offers.length,
-    offers
-  };
+  return { tenant: req.tenant.name, total: offers.length, offers };
 });
 
 app.post("/imports/csv", async (req, reply) => {
   const file = await req.file();
-
   if (!file) {
     return reply.code(400).send({ error: "Arquivo CSV não enviado" });
   }
@@ -87,52 +67,31 @@ app.post("/imports/csv", async (req, reply) => {
     const priceFrom = Number(row.price_from);
 
     if (!row.internal_code && !row.barcode) {
-      errors.push({
-        line,
-        message: "Produto sem código interno e sem código de barras"
-      });
+      errors.push({ line, message: "Produto sem código interno e sem código de barras" });
     }
 
     if (!row.name) {
-      errors.push({
-        line,
-        message: "Produto sem nome"
-      });
+      errors.push({ line, message: "Produto sem nome" });
     }
 
     if (!priceTo || priceTo <= 0) {
-      errors.push({
-        line,
-        message: "Preço promocional inválido"
-      });
+      errors.push({ line, message: "Preço promocional inválido" });
     }
 
     if (row.price_to && String(row.price_to).includes(",")) {
-      warnings.push({
-        line,
-        message: "Preço com vírgula detectado. Use ponto decimal, exemplo: 19.90."
-      });
+      warnings.push({ line, message: "Preço com vírgula detectado. Use ponto decimal, exemplo: 19.90." });
     }
 
     if (priceFrom && priceTo > priceFrom) {
-      warnings.push({
-        line,
-        message: "Preço promocional maior que o preço original"
-      });
+      warnings.push({ line, message: "Preço promocional maior que o preço original" });
     }
 
     if (priceFrom && priceTo < priceFrom * 0.4) {
-      warnings.push({
-        line,
-        message: "Preço promocional muito abaixo do preço original. Verifique possível erro de digitação."
-      });
+      warnings.push({ line, message: "Preço promocional muito abaixo do preço original. Verifique possível erro de digitação." });
     }
 
     if (priceFrom && priceTo === priceFrom) {
-      warnings.push({
-        line,
-        message: "Preço promocional igual ao preço original"
-      });
+      warnings.push({ line, message: "Preço promocional igual ao preço original" });
     }
   });
 
@@ -168,10 +127,7 @@ app.post("/imports/csv", async (req, reply) => {
     const line = index + 2;
 
     const category = await prisma.categories.findFirst({
-      where: {
-        name: row.category,
-        tenant_id: req.tenant.id
-      }
+      where: { name: row.category, tenant_id: req.tenant.id }
     });
 
     let product = await prisma.products.findFirst({
@@ -198,20 +154,12 @@ app.post("/imports/csv", async (req, reply) => {
     }
 
     const store = await prisma.stores.findFirst({
-      where: {
-        slug: row.store_slug,
-        tenant_id: req.tenant.id
-      }
+      where: { slug: row.store_slug, tenant_id: req.tenant.id }
     });
 
     if (!store) {
       skippedRows += 1;
-
-      warnings.push({
-        line,
-        message: `Loja não encontrada: ${row.store_slug}. Oferta ignorada.`
-      });
-
+      warnings.push({ line, message: `Loja não encontrada: ${row.store_slug}. Oferta ignorada.` });
       continue;
     }
 
@@ -219,13 +167,7 @@ app.post("/imports/csv", async (req, reply) => {
     const endsAt = row.ends_at ? new Date(row.ends_at) : null;
 
     const existingOffer = await prisma.offers.findFirst({
-      where: {
-        tenant_id: req.tenant.id,
-        store_id: store.id,
-        product_id: product.id,
-        starts_at: startsAt,
-        ends_at: endsAt
-      }
+      where: { tenant_id: req.tenant.id, store_id: store.id, product_id: product.id, starts_at: startsAt, ends_at: endsAt }
     });
 
     const offerData = {
@@ -241,14 +183,9 @@ app.post("/imports/csv", async (req, reply) => {
     };
 
     if (existingOffer) {
-      await prisma.offers.update({
-        where: { id: existingOffer.id },
-        data: offerData
-      });
+      await prisma.offers.update({ where: { id: existingOffer.id }, data: offerData });
     } else {
-      await prisma.offers.create({
-        data: offerData
-      });
+      await prisma.offers.create({ data: offerData });
     }
 
     importedRows += 1;
