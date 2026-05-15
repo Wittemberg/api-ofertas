@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    networks:
+      - publica
+    deploy:
+      replicas: 1
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.admin-ofertas.rule=Host(`admin-ofertas.wrtec.com.br`)
+        - traefik.http.routers.admin-ofertas.entrypoints=web
+        - traefik.http.services.admin-ofertas.loadbalancer.server.port=80
+
+networks:
+  publica:
+    external: true
