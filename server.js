@@ -11,6 +11,11 @@ app.register(cors);
 app.register(jwt, { secret: process.env.JWT_SECRET || 'super-secret-key-change-in-production' });
 app.register(multipart);
 
+// Decorators compartilhados (precisa ser ANTES dos registers das rotas)
+const { authenticate, authorize } = require('./lib/auth')(app);
+app.decorate('authenticate', authenticate);
+app.decorate('authorize', authorize);
+
 // Route modules
 app.register(require('./routes/auth'), { prefix: '/auth' });
 app.register(require('./routes/products'), { prefix: '/products' });
