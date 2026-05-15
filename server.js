@@ -9,8 +9,15 @@ const prisma = new PrismaClient();
 const app = Fastify({ logger: true });
 
 app.register(cors);
-app.register(jwt, { secret: "supersecret" });
+// app.register(jwt, { secret: "supersecret" });
+app.register(jwt, { secret: process.env.JWT_SECRET || 'super-secret-key-change-in-production' });
 app.register(multipart);
+  // Auth
+  app.register(require('./routes/auth'), { prefix: '/auth' });
+  // Products
+  app.register(require('./routes/products'), { prefix: '/products' });
+  // Stores
+  app.register(require('./routes/stores'), { prefix: '/stores' });
 
 app.addHook("preHandler", async (request, reply) => {
   const host = request.headers.host;
