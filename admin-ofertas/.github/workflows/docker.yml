@@ -1,0 +1,24 @@
+name: Build admin image
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login no GHCR
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u Wittemberg --password-stdin
+
+      - name: Build e push da imagem
+        run: |
+          docker build -t ghcr.io/wittemberg/admin-ofertas:latest .
+          docker push ghcr.io/wittemberg/admin-ofertas:latest
+
+      - name: Forçar redeploy no Portainer
+        run: |
+          curl -X POST "${{ secrets.PORTAINER_WEBHOOK_URL_ADMIN }}"
