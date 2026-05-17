@@ -7,7 +7,11 @@ const { prisma } = require("./prisma");
 
 const app = Fastify({ logger: true });
 
-app.register(cors);
+app.register(cors, {
+  origin: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+});
 app.register(jwt, { secret: process.env.JWT_SECRET || 'super-secret-key-change-in-production' });
 app.register(multipart);
 
