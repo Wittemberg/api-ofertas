@@ -24,10 +24,11 @@ app.decorate('authorize', authorize);
 app.register(require('./routes/auth'), { prefix: '/auth' });
 app.register(require('./routes/products'), { prefix: '/products' });
 app.register(require('./routes/stores'), { prefix: '/stores' });
-app.register(require('./routes/offers'), { prefix: '/offers' });
 app.register(require('./routes/categories'), { prefix: '/categories' });
+app.register(require('./routes/offers'), { prefix: '/offers' });
 app.register(require('./routes/upload'), { prefix: '/upload' });
 app.register(require('./routes/dashboard'), { prefix: '/dashboard' });
+app.register(require('./routes/reports'), { prefix: '/reports' });
 
 app.addHook("preHandler", async (request, reply) => {
   const host = request.headers.host;
