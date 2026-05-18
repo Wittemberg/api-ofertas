@@ -33,6 +33,7 @@ jobs:
         with:
           host: 204.157.108.110
           username: root
+          port: 5822
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             CONTAINER_ID=$(docker ps -q -f name=api-ofertas_api | head -1)
