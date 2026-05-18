@@ -85,23 +85,27 @@ Endpoint REST para que ERPs enviem dados diretamente sem depender de CSV.
 ## 🤖 Roadmap de IA
 
 ### 1 — Busca automática de imagens via IA
-**Prioridade:** Média | **Impacto:** Alto
+Prioridade: Média | Impacto: Alto
 Nome + código de barras → busca web → preview no frontend.
 
 ### 2 — Sugestão de categoria por IA
-**Prioridade:** Baixa | **Impacto:** Médio
+Prioridade: Baixa | Impacto: Médio
 Sugestão automática baseada no nome do produto.
 
 ### 3 — Geração de descrição de produto
-**Prioridade:** Baixa | **Impacto:** Médio
+Prioridade: Baixa | Impacto: Médio
 Descrição comercial a partir de nome, unidade e categoria.
 
 ### 4 — Enriquecimento por código de barras
-**Prioridade:** Média | **Impacto:** Alto
+Prioridade: Média | Impacto: Alto
 Consulta a APIs públicas pelo EAN (marca, fabricante).
 
-### 5 — Ofertas inteligentes
-**Prioridade:** Alta | **Impacto:** Muito Alto
+### 5 — Sugestão de paleta de cores a partir da logo
+Prioridade: Média | Impacto: Alto
+Ao fazer upload da logo da empresa, o sistema analisa as cores predominantes e sugere uma paleta completa (primária, secundária, destaque, fundo, texto) para personalizar a interface do cliente final ou portal de ofertas.
+
+### 6 — Ofertas inteligentes
+Prioridade: Alta | Impacto: Muito Alto
 Sugestão de preços promocionais baseada em histórico e sazonalidade.
 
 ---
