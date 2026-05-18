@@ -1,9 +1,7 @@
 name: Build API image
-
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 permissions:
   contents: read
@@ -12,7 +10,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Baixar código
         uses: actions/checkout@v4
@@ -30,6 +27,22 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/wittemberg/api-ofertas:latest
+
+      - name: Apply migrations via SSH no servidor
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 204.157.108.110
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            CONTAINER_ID=$(docker ps -q -f name=api-ofertas_api | head -1)
+            if [ -z "$CONTAINER_ID" ]; then
+              echo "❌ Container api-ofertas_api não encontrado"
+              exit 1
+            fi
+            echo "✅ Container encontrado: $CONTAINER_ID"
+            docker exec $CONTAINER_ID npx prisma db push --accept-data-loss 2>&1
+            echo "✅ Migrations aplicadas com sucesso"
 
       - name: 🔄 Forçar redeploy no Portainer
         run: |
