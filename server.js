@@ -16,9 +16,10 @@ app.register(jwt, { secret: process.env.JWT_SECRET || 'super-secret-key-change-i
 app.register(multipart);
 
 // Decorators compartilhados (precisa ser ANTES dos registers das rotas)
-const { authenticate, authorize } = require('./lib/auth')(app);
+const { authenticate, authorize, authenticateApiKey } = require('./lib/auth')(app);
 app.decorate('authenticate', authenticate);
 app.decorate('authorize', authorize);
+app.decorate('authenticateApiKey', authenticateApiKey);
 
 // Route modules
 app.register(require('./routes/auth'), { prefix: '/auth' });
