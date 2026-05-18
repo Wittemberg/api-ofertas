@@ -31,6 +31,26 @@ model tenants {
   media_assets     media_assets[]
   api_keys         api_keys[]
   integration_logs integration_logs[]
+  
+  // Informações da empresa (site público)
+  description       String?
+  contact_phone     String?
+  contact_email     String?
+  contact_whatsapp  String?
+  
+  // Endereço
+  address_street    String?
+  address_number    String?
+  address_city      String?
+  address_state     String?
+  address_zip       String?
+  
+  // Redes sociais e horários
+  social_media      Json?      @default("{}")
+  opening_hours     Json?      @default("[]")
+  
+  // Identidade visual
+  font_family       String?    @default("'Inter', sans-serif")
 }
 
 model users {
