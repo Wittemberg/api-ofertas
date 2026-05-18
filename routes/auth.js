@@ -2,7 +2,8 @@ const { prisma } = require('../prisma');
 const bcrypt = require('bcrypt');
 
 const authPlugin = async function (fastify, opts) {
-  const { authenticate, authorize } = require('../lib/auth')(fastify);
+  const { authenticate, authorize, authenticateApiKey } = require('../lib/auth')(fastify);
+  fastify.decorate('authenticateApiKey', authenticateApiKey);
   fastify.decorate('authenticate', authenticate);
   fastify.decorate('authorize', authorize);
 
