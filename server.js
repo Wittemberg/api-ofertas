@@ -26,6 +26,7 @@ app.register(require('./routes/products'), { prefix: '/products' });
 app.register(require('./routes/stores'), { prefix: '/stores' });
 app.register(require('./routes/offers'), { prefix: '/offers' });
 app.register(require('./routes/categories'), { prefix: '/categories' });
+app.register(require('./routes/upload'), { prefix: '/upload' });
 
 app.addHook("preHandler", async (request, reply) => {
   const host = request.headers.host;
