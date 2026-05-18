@@ -2,14 +2,16 @@ const { prisma } = require('../prisma');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 const s3 = new S3Client({
-  endpoint: process.env.S3_ENDPOINT,
-  region: process.env.S3_REGION || 'us-east-1',
+  endpoint: process.env.MINIO_ENDPOINT || 'https://s3.wrtec.com.br',
+  region: process.env.MINIO_REGION || 'eu-south',
   credentials: {
-    accessKeyId: process.env.S3_ACCESS_KEY,
-    secretAccessKey: process.env.S3_SECRET_KEY
+    accessKeyId: process.env.MINIO_ACCESS_KEY || 'wrtec',
+    secretAccessKey: process.env.MINIO_SECRET_KEY || 'Zxsa@667'
   },
   forcePathStyle: true
 });
+
+const BUCKET = process.env.MINIO_BUCKET || 'admin-ofertas';
 
 const tenantRoutes = async function (fastify, opts) {
 
@@ -125,7 +127,7 @@ const tenantRoutes = async function (fastify, opts) {
       ACL: 'public-read'
     }));
 
-    const logoUrl = `${process.env.S3_PUBLIC_URL}/${key}`;
+    const logoUrl = `https://s3.wrtec.com.br/${BUCKET}/${key}`;
 
     await prisma.tenants.update({
       where: { id: request.tenant.id },
