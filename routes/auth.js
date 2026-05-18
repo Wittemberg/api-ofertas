@@ -3,9 +3,6 @@ const bcrypt = require('bcrypt');
 
 const authPlugin = async function (fastify, opts) {
   const { authenticate, authorize, authenticateApiKey } = require('../lib/auth')(fastify);
-  fastify.decorate('authenticateApiKey', authenticateApiKey);
-  fastify.decorate('authenticate', authenticate);
-  fastify.decorate('authorize', authorize);
 
   // POST /auth/register
   fastify.post('/register', async function (request, reply) {
