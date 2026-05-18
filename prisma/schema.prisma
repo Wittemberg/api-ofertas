@@ -29,6 +29,8 @@ model tenants {
   offers           offers[]
   csv_imports      csv_imports[]
   media_assets     media_assets[]
+  api_keys         api_keys[]
+  integration_logs integration_logs[]
 }
 
 model users {
@@ -154,5 +156,39 @@ model media_assets {
   created_at     DateTime @default(now()) @db.Timestamptz(6)
 
   tenant         tenants  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+}
 
+model api_keys {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id  String    @db.Uuid
+  label      String
+  key_hash   String    @db.Text
+  key_prefix String
+  role       String    @default("integration")
+  is_active  Boolean   @default(true)
+  last_used  DateTime? @db.Timestamptz(6)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  tenant     tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([key_hash])
+  @@index([tenant_id])
+}
+
+model integration_logs {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id        String   @db.Uuid
+  api_key_id       String?  @db.Uuid
+  idempotency_key  String?
+  endpoint         String
+  method           String
+  status_code      Int
+  ip_address       String?
+  summary          Json?    @default("{}")
+  errors           Json?    @default("[]")
+  warnings         Json?    @default("[]")
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  tenant           tenants  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@index([idempotency_key])
 }

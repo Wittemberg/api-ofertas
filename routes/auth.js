@@ -97,4 +97,65 @@ const authPlugin = async function (fastify, opts) {
   });
 };
 
+  // Geração de API Key
+  fastify.post('/api-keys', {
+    preHandler: [fastify.authenticate, fastify.authorize('admin')]
+  }, async function (request, reply) {
+    const { label } = request.body
+    if (!label) return reply.code(400).send({ error: 'label é obrigatório' })
+
+    const crypto = require('crypto')
+    const bcrypt = require('bcrypt')
+    const rawKey = crypto.randomUUID()
+    const keyPrefix = rawKey.substring(0, 8)
+    const keyHash = await bcrypt.hash(rawKey, 10)
+
+    await prisma.api_keys.create({
+      data: {
+        tenant_id: request.tenant.id,
+        label,
+        key_hash: keyHash,
+        key_prefix: keyPrefix,
+        role: 'integration'
+      }
+    })
+
+    return reply.code(201).send({
+      raw_key: rawKey,
+      label,
+      warning: 'Esta chave será exibida apenas uma vez. Armazene-a com segurança.'
+    })
+  })
+
+  // Listar chaves (sem o hash)
+  fastify.get('/api-keys', {
+    preHandler: [fastify.authenticate, fastify.authorize('admin')]
+  }, async function (request, reply) {
+    const keys = await prisma.api_keys.findMany({
+      where: { tenant_id: request.tenant.id },
+      select: {
+        id: true, label: true, key_prefix: true,
+        is_active: true, last_used: true, created_at: true
+      },
+      orderBy: { created_at: 'desc' }
+    })
+    return keys
+  })
+
+  // Revogar chave
+  fastify.delete('/api-keys/:id', {
+    preHandler: [fastify.authenticate, fastify.authorize('admin')]
+  }, async function (request, reply) {
+    const key = await prisma.api_keys.findFirst({
+      where: { id: request.params.id, tenant_id: request.tenant.id }
+    })
+    if (!key) return reply.code(404).send({ error: 'Chave não encontrada' })
+
+    await prisma.api_keys.update({
+      where: { id: key.id },
+      data: { is_active: false }
+    })
+    return reply.code(204).send()
+  })
+  
 module.exports = authPlugin;
