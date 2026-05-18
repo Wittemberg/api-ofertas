@@ -120,7 +120,7 @@ const tenantRoutes = async function (fastify, opts) {
     const key = `tenants/${request.tenant.id}/logo.${ext}`;
 
     await s3.send(new PutObjectCommand({
-      Bucket: process.env.S3_BUCKET || 'ofertas',
+      Bucket: process.env.MINIO_BUCKET || 'admin-ofertas',
       Key: key,
       Body: buffer,
       ContentType: file.mimetype,
