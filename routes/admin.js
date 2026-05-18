@@ -4,10 +4,10 @@ const { prisma } = require('../prisma')
 const adminRoutes = async function (fastify, opts) {
 
   // ========================================================================
-  // GET /admin/config — Lista todas as configurações (SEM audit, é leitura)
+  // GET /admin/config — Lista todas as configurações (leitura, sem audit)
   // ========================================================================
   fastify.get('/config', {
-    preHandler: [fastify.authenticate, fastify.authorize('admin')]
+    preHandler: [fastify.authenticate, fastify.authorize('superadmin')]
   }, async function (request, reply) {
     const configs = await getAllConfigs()
     return configs
@@ -17,7 +17,7 @@ const adminRoutes = async function (fastify, opts) {
   // GET /admin/config/:category — Lista configs de uma categoria (leitura)
   // ========================================================================
   fastify.get('/config/:category', {
-    preHandler: [fastify.authenticate, fastify.authorize('admin')]
+    preHandler: [fastify.authenticate, fastify.authorize('superadmin')]
   }, async function (request, reply) {
     const configs = await prisma.system_configs.findMany({
       where: { category: request.params.category },
@@ -31,12 +31,10 @@ const adminRoutes = async function (fastify, opts) {
 
   // ========================================================================
   // PUT /admin/config/:category/:key — ATUALIZA uma configuração
-  // ────────────────────────────────────────────────────────────────────────
-  // ANTES de atualizar, busca o valor ANTIGO. Depois de salvar, registra
-  // no audit_logs: quem fez, o que mudou, de/para qual valor, IP.
+  // Antes de atualizar, busca o valor ANTIGO. Depois registra no audit_logs.
   // ========================================================================
   fastify.put('/config/:category/:key', {
-    preHandler: [fastify.authenticate, fastify.authorize('admin')]
+    preHandler: [fastify.authenticate, fastify.authorize('superadmin')]
   }, async function (request, reply) {
     const { category, key } = request.params
     const { value, is_secret, description } = request.body
@@ -49,16 +47,16 @@ const adminRoutes = async function (fastify, opts) {
     // 2) Salva o novo valor
     const config = await setConfig(category, key, value, { is_secret, description })
 
-    // 3) Registra no AUDIT LOG — isso é NOVO
+    // 3) Registra no AUDIT LOG
     await prisma.audit_logs.create({
       data: {
-        user_id: request.user.id,                  // ID do admin que fez a alteração
-        action: 'update_config',                    // O que foi feito
-        entity_type: 'system_configs',              // Em qual tabela
-        entity_id: `${category}.${key}`,             // Qual registro específico
-        old_value: oldConfig?.value || null,        // Valor ANTES
-        new_value: value,                           // Valor DEPOIS
-        ip_address: request.ip                      // IP de origem
+        user_id: request.user.id,
+        action: 'update_config',
+        entity_type: 'system_configs',
+        entity_id: `${category}.${key}`,
+        old_value: oldConfig?.value || null,
+        new_value: value,
+        ip_address: request.ip
       }
     })
 
@@ -67,11 +65,9 @@ const adminRoutes = async function (fastify, opts) {
 
   // ========================================================================
   // POST /admin/config — CRIA uma nova configuração
-  // ────────────────────────────────────────────────────────────────────────
-  // Como é criação, não tem old_value. Registra só new_value.
   // ========================================================================
   fastify.post('/config', {
-    preHandler: [fastify.authenticate, fastify.authorize('admin')]
+    preHandler: [fastify.authenticate, fastify.authorize('superadmin')]
   }, async function (request, reply) {
     const { category, key, value, is_secret, description } = request.body
 
@@ -88,7 +84,7 @@ const adminRoutes = async function (fastify, opts) {
         action: 'create_config',
         entity_type: 'system_configs',
         entity_id: `${category}.${key}`,
-        old_value: null,                               // Não tinha valor anterior
+        old_value: null,
         new_value: value,
         ip_address: request.ip
       }
@@ -99,11 +95,9 @@ const adminRoutes = async function (fastify, opts) {
 
   // ========================================================================
   // DELETE /admin/config/:category/:key — REMOVE uma configuração
-  // ────────────────────────────────────────────────────────────────────────
-  // Antes de deletar, captura o valor ANTIGO. Depois registra no audit.
   // ========================================================================
-  fastify.delete('/admin/config/:category/:key', {
-    preHandler: [fastify.authenticate, fastify.authorize('admin')]
+  fastify.delete('/config/:category/:key', {
+    preHandler: [fastify.authenticate, fastify.authorize('superadmin')]
   }, async function (request, reply) {
     const { category, key } = request.params
 
@@ -122,7 +116,7 @@ const adminRoutes = async function (fastify, opts) {
         action: 'delete_config',
         entity_type: 'system_configs',
         entity_id: `${category}.${key}`,
-        old_value: oldConfig?.value || null,           // Valor que foi removido
+        old_value: oldConfig?.value || null,
         new_value: null,
         ip_address: request.ip
       }
@@ -135,7 +129,7 @@ const adminRoutes = async function (fastify, opts) {
   // POST /admin/config/reload — Invalida o cache (não altera dados)
   // ========================================================================
   fastify.post('/config/reload', {
-    preHandler: [fastify.authenticate, fastify.authorize('admin')]
+    preHandler: [fastify.authenticate, fastify.authorize('superadmin')]
   }, async function (request, reply) {
     invalidateCache()
     return { message: 'Cache invalidado. Próximas leituras buscarão do banco.' }
