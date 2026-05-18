@@ -32,6 +32,7 @@ app.register(require('./routes/dashboard'), { prefix: '/dashboard' });
 app.register(require('./routes/reports'), { prefix: '/reports' });
 app.register(require('./routes/integration'), { prefix: '/api/v1/integration' });
 app.register(require('./routes/tenant'), { prefix: '/auth' });
+app.register(require('./routes/admin'), { prefix: '/admin' });
 
 app.addHook("preHandler", async (request, reply) => {
   const host = request.headers.host;
