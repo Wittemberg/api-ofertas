@@ -212,3 +212,17 @@ model integration_logs {
   @@index([tenant_id])
   @@index([idempotency_key])
 }
+
+model system_configs {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category    String   // "storage", "database", "geral", "email"
+  key         String   // "endpoint", "access_key", "bucket"
+  value       String   // valor criptografado se is_secret=true
+  is_secret   Boolean  @default(false)
+  description String?
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([category, key])
+  @@map("system_configs")
+}
