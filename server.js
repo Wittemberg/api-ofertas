@@ -33,9 +33,12 @@ app.register(require('./routes/reports'), { prefix: '/reports' });
 app.register(require('./routes/integration'), { prefix: '/api/v1/integration' });
 app.register(require('./routes/tenant'), { prefix: '/auth' });
 app.register(require('./routes/admin'), { prefix: '/admin' });
+app.register(require('./routes/public'), { prefix: '/api/public' });
 
 app.addHook("preHandler", async (request, reply) => {
-  const host = request.headers.host;
+  // Pular rotas públicas — identificação do tenant é feita por query param
+  if (request.url.startsWith('/api/public')) return;
+  const host = request.headers.host;  
   const tenant = await prisma.tenants.findFirst({
     where: { domain: host }
   });
