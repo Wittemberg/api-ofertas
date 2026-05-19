@@ -125,40 +125,39 @@ const adminRoutes = async function (fastify, opts) {
     return { message: 'Configuração removida. Sistema usará valor padrão (env/hardcoded).' }
   })
 
-  // ========================================================================
-  // POST /admin/config/reload — Invalida o cache (não altera dados)
-  // ========================================================================
-  fastify.post('/config/reload', {
-    preHandler: [fastify.authenticate, fastify.authorize('superadmin')]
-  }, async function (request, reply) {
-    invalidateCache()
-    return { message: 'Cache invalidado. Próximas leituras buscarão do banco.' }
-  })
-}
+// ========================================================================
+// POST /admin/config/reload — Invalida o cache
+// ========================================================================
+fastify.post('/config/reload', {
+  preHandler: [fastify.authenticate, fastify.authorize('superadmin')]
+}, async function (request, reply) {
+  invalidateCache()
+  return { message: 'Cache invalidado. Próximas leituras buscarão do banco.' }
+})
 
 // ========================================================================
-// GET /admin/audit — Lista logs de auditoria (paginado, filtrável)
+// GET /admin/audit — Logs de auditoria (adicionar AQUI)
 // ========================================================================
 fastify.get('/audit', {
   preHandler: [fastify.authenticate, fastify.authorize('superadmin')]
 }, async function (request, reply) {
   const { limit = 50, offset = 0, action, entity_id } = request.query
   const where = {}
-
   if (action) where.action = action
-  if (entity_id) where.entity_id = { contains: entity_id }
+  if (entity_id) where.entity_id = entity_id
 
   const [logs, total] = await Promise.all([
     prisma.audit_logs.findMany({
       where,
       orderBy: { created_at: 'desc' },
-      take: Math.min(parseInt(limit), 200),
-      skip: parseInt(offset)
+      take: Number(limit),
+      skip: Number(offset)
     }),
     prisma.audit_logs.count({ where })
   ])
 
-  return { logs, total, limit: parseInt(limit), offset: parseInt(offset) }
+  return { logs, total }
 })
 
+}  
 module.exports = adminRoutes
