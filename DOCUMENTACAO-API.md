@@ -1,100 +1,123 @@
 # 📦 api-ofertas — Documentação Técnica
 
-> Backend do sistema Admin Ofertas — API REST para gestão de ofertas de supermercado
+> API Fastify + Prisma + PostgreSQL para gestão de ofertas de supermercados.
+> Deploy em Docker Swarm com Traefik + Let's Encrypt.
 
-## 📋 Visão Geral
-
-API REST com Fastify + Prisma + PostgreSQL. Multi-tenant para produtos, filiais, categorias e ofertas com importação CSV.
-
-## 🛠️ Stack
-
-| Tecnologia | Versão | Função |
-|---|---|---|
-| Node.js | 20 (Alpine) | Runtime |
-| Fastify | ^5.8.5 | Framework HTTP |
-| Prisma | ^6.19.3 | ORM + Migrations |
-| PostgreSQL | — | Banco de dados |
-| @fastify/jwt | ^10.0.0 | Autenticação JWT |
-| csv-parse | ^6.2.1 | Parsing CSV |
-| bcrypt | ^6.0.0 | Hash de senhas |
-| @fastify/cors | ^11.2.0 | CORS |
-| @fastify/multipart | ^10.0.0 | Upload |
-
-## 📁 Estrutura
-api-ofertas/
-.github/workflows/       CI/CD
-lib/                     auth middleware
-prisma/                  schema + migrations
-routes/
-auth.js                login JWT
-products.js            CRUD produtos
-stores.js              CRUD filiais
-categories.js          CRUD categorias
-offers.js              CRUD ofertas
-server.js                entry point + imports
-prisma.js                Prisma Client
-package.json
-Dockerfile
-docker-compose.yml
-
-
-## 🗄️ Modelo
-
-**tenants** — id (UUID), name, slug, domain, is_active
-**users** — id (UUID), tenant_id (FK), name, email, password_hash, role
-**stores** — id (UUID), tenant_id (FK), name, slug, city, state, address, phone, is_active
-**categories** — id (UUID), tenant_id (FK), name, slug, is_active
-**products** — id (UUID), tenant_id (FK), category_id (FK), internal_code, barcode, name, unit, is_active
-**offers** — id (UUID), tenant_id (FK), store_id (FK), product_id (FK), price_from, price_to, starts_at, ends_at, is_featured
-**csv_imports** — id (UUID), tenant_id (FK), file_url, status, rows, errors (JSON)
-**media_assets** — id (UUID), tenant_id (FK), product_id (FK), file_url, file_type
+---
 
 ## 🔐 Autenticação
 
-JWT com authenticate/authorize('admin'). Multi-tenant por header Host.
+### JWT (usuários)
+- Login: `POST /auth/login` → retorna `{ user, token }`
+- Middleware: `fastify.authenticate` decodifica JWT, verifica `decoded.sub` e busca usuário ativo
+- Autorização: `fastify.authorize(...roles)` — verifica `user.role` contra lista de roles permitidas
+- Guards usados: `authorize('admin')` e `authorize('superadmin')`
 
-## 🐳 Docker
+### API Key (integração ERPs)
+- Header: `X-API-Key` com hash bcrypt armazenado
+- Middleware: `fastify.authenticateApiKey` — verifica prefixo + hash
+- Rate limit: 10 req/min por chave
 
-Dockerfile: node:20-alpine → npm install → npx prisma generate → node server.js
-docker-compose: app + postgresql
+---
 
-## 🔄 CI/CD
+## 🗄️ Models (Prisma ORM)
 
-Push main → GitHub Actions → ghcr.io → webhook Portainer → Swarm
+| Model | Tabela | Finalidade |
+|---|---|---|
+| `tenants` | `tenants` | Multi-tenant, dados da empresa, identidade visual |
+| `users` | `users` | Usuários do painel, role `admin` ou `superadmin` |
+| `stores` | `stores` | Filiais (lojas) |
+| `categories` | `categories` | Categorias de produtos |
+| `products` | `products` | Produtos (código interno, EAN, nome, unidade) |
+| `offers` | `offers` | Ofertas (preço de/para, período, loja) |
+| `csv_imports` | `csv_imports` | Histórico de importações CSV |
+| `media_assets` | `media_assets` | Assets de mídia (imagens, etc.) |
+| `api_keys` | `api_keys` | Chaves de API para integração |
+| `integration_logs` | `integration_logs` | Log de requisições de integração |
+| `system_configs` | `system_configs` | Configurações do sistema (cache + fallback env) |
+| `audit_logs` | `audit_logs` | Auditoria de alterações no Super Admin |
 
-## 🌐 Deploy
-
-Docker Swarm + Traefik + Let's Encrypt + Portainer EE
+---
 
 ## 📡 Endpoints
 
+### Auth (`/auth`)
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
-| POST | /auth/login | Público | Login |
-| GET | /products | JWT | Listar (page, limit, search) |
-| GET | /products/:id | JWT | Detalhe |
-| POST | /products | JWT+Admin | Criar |
-| PUT | /products/:id | JWT+Admin | Atualizar |
-| DELETE | /products/:id | JWT+Admin | Excluir |
-| GET | /stores | JWT | Listar |
-| GET | /stores/:id | JWT | Detalhe |
-| POST | /stores | JWT+Admin | Criar |
-| PUT | /stores/:id | JWT+Admin | Atualizar |
-| DELETE | /stores/:id | JWT+Admin | Excluir |
-| GET | /categories | JWT | Listar |
-| GET | /categories/:id | JWT | Detalhe |
-| POST | /categories | JWT+Admin | Criar |
-| PUT | /categories/:id | JWT+Admin | Atualizar |
-| DELETE | /categories/:id | JWT+Admin | Excluir |
-| GET | /offers | JWT | Listar |
-| GET | /offers/:id | JWT | Detalhe |
-| POST | /offers | JWT+Admin | Criar |
-| PUT | /offers/:id | JWT+Admin | Atualizar |
-| DELETE | /offers/:id | JWT+Admin | Excluir |
-| POST | /imports/csv | JWT | Importar ofertas |
-| POST | /imports/stores | JWT | Importar filiais |
-| POST | /imports/categories | JWT | Importar categorias |
-| GET | / | Público | Health check |
+| POST | `/auth/login` | API Key | Login (email + senha) → JWT |
+| POST | `/auth/register` | API Key | Registro de novo usuário |
+| POST | `/auth/change-password` | JWT (qualquer) | Alterar própria senha |
+| GET | `/auth/me` | JWT | Dados do usuário logado |
+| POST | `/auth/api-keys` | JWT (admin) | Gerar nova API Key |
+| GET | `/auth/api-keys` | JWT (admin) | Listar chaves |
+| DELETE | `/auth/api-keys/:id` | JWT (admin) | Revogar chave |
+
+### Admin — System Configs (`/admin`)
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/admin/config` | JWT (superadmin) | Lista todas as configs (secreto mascarado) |
+| GET | `/admin/config/:category` | JWT (superadmin) | Lista configs de uma categoria |
+| PUT | `/admin/config/:category/:key` | JWT (superadmin) | Atualiza config + registra audit log |
+| POST | `/admin/config` | JWT (superadmin) | Cria nova config + registra audit log |
+| DELETE | `/admin/config/:category/:key` | JWT (superadmin) | Remove config + registra audit log |
+| POST | `/admin/config/reload` | JWT (superadmin) | Invalida o cache |
+
+### Admin — Auditoria (`/admin`)
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/admin/audit` | JWT (superadmin) | Lista logs de auditoria (paginado, filtrável) |
+
+### Reports (`/reports`)
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/reports/active-offers` | JWT | Ofertas vigentes (CSV) |
+| GET | `/reports/without-offers` | JWT | Produtos sem oferta ativa (CSV) |
+| GET | `/reports/inactive-stores` | JWT | Lojas inativas (CSV) |
+
+### Integration (`/api/v1/integration`)
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| POST | `/api/v1/integration/import` | API Key | Importação em lote (stores/categories/products/offers) |
+| GET | `/api/v1/integration/status/:idempotency_key` | API Key | Status de importação |
 
 ---
-Documentação gerada em 18/05/2026.
+
+## ⚙️ System Configs — Chain de Resolução
+1. Banco (system_configs) ← painel Super Admin
+2. Env vars (STORAGE_ENDPOINT, etc.) ← docker-compose
+3. Hardcoded fallback ← código
+
+
+Categorias: `storage`, `database`, `geral`, `email`
+
+---
+
+## 🧠 Auditoria (audit_logs)
+
+Toda operação de escrita em `/admin/config` registra:
+
+| Campo | Descrição |
+|---|---|
+| `user_id` | UUID do superadmin que fez a ação |
+| `action` | `create_config`, `update_config`, `delete_config` |
+| `entity_id` | `{category}.{key}` (ex: `storage.endpoint`) |
+| `old_value` | Valor antes da alteração |
+| `new_value` | Valor depois da alteração |
+| `ip_address` | IP de origem da requisição |
+
+---
+
+## 🐳 Docker & Deploy
+
+| Item | Detalhe |
+|---|---|
+| Imagem | `ghcr.io/wittemberg/api-ofertas:latest` |
+| CI/CD | GitHub Action → build → push GHCR → SSH prisma migrate → Portainer webhook |
+| Orquestração | Docker Swarm |
+| Proxy | Traefik + Let's Encrypt |
+| URL | `https://api-ofertas.wrtec.com.br` |
+
+---
+
+> Documentação gerada em 19/05/2026.
+
