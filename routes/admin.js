@@ -136,4 +136,29 @@ const adminRoutes = async function (fastify, opts) {
   })
 }
 
+// ========================================================================
+// GET /admin/audit — Lista logs de auditoria (paginado, filtrável)
+// ========================================================================
+fastify.get('/audit', {
+  preHandler: [fastify.authenticate, fastify.authorize('superadmin')]
+}, async function (request, reply) {
+  const { limit = 50, offset = 0, action, entity_id } = request.query
+  const where = {}
+
+  if (action) where.action = action
+  if (entity_id) where.entity_id = { contains: entity_id }
+
+  const [logs, total] = await Promise.all([
+    prisma.audit_logs.findMany({
+      where,
+      orderBy: { created_at: 'desc' },
+      take: Math.min(parseInt(limit), 200),
+      skip: parseInt(offset)
+    }),
+    prisma.audit_logs.count({ where })
+  ])
+
+  return { logs, total, limit: parseInt(limit), offset: parseInt(offset) }
+})
+
 module.exports = adminRoutes
