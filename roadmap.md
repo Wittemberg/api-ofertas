@@ -1,19 +1,9 @@
-# 🗺️ Roadmap - Admin Ofertas
+# 🗺️ Roadmap — Admin Ofertas
 > Documento central do projeto. Mantido pela IA da Adapta ONE para contexto entre sessões.
 
+---
+
 ## ✅ Status Atual — Concluído
-
-### Sprint 1 — Gerenciamento Visual de Ofertas
-- Modal CRUD de ofertas (produto, loja, preços, datas, destaque)
-- Adicionado `updateOffer` e `getOffer` na API do frontend
-
-### Sprint 2 — Upload de Imagens (MinIO S3)
-- Rota `POST /upload/product/:id` no backend com `@aws-sdk/client-s3`
-- Upload para MinIO S3
-- Seção de imagem no modal de edição de produtos
-- Coluna "Imagem" com botão "🔗 Ver" na tabela
-- Modal de preview em tela cheia
-- Rotas faltantes registradas no server.js (categories, upload, dashboard)
 
 ### Sprint 3 — Dashboard com Métricas e Gráficos
 - 4 cards métricos (Produtos, Lojas, Categorias, Ofertas)
@@ -49,93 +39,95 @@
 - Cópia automática da chave para área de transferência ao clicar
 - Rate limit: 10 requisições/minuto por chave
 - Tabela `integration_logs` registra toda requisição (IP, status, sumário)
-- Workflow CI/CD da API com SSH para migrations via `appleboy/ssh-action`
+
+### Sprint 6 — Super Admin System 🆕
+#### Infraestrutura e Segurança
+- Tabela `system_configs` no PostgreSQL (criada manualmente no banco)
+- Tabela `audit_logs` no PostgreSQL (criada manualmente no banco)
+- Models `system_configs` e `audit_logs` adicionados ao `prisma/schema.prisma`
+- `lib/config.js` — sistema de cache + CRUD (getAllConfigs, setConfig, deleteConfig, invalidateCache)
+- Chain de resolução: Banco → Env vars → Hardcoded fallback no código
+- `lib/auth.js` — corrigido bug crítico: `decoded.id` → `decoded.sub` (JWT usava `sub` mas o middleware buscava `decoded.id` = `undefined`)
+
+#### Backend — Rotas Admin (`routes/admin.js`)
+- `GET /admin/config` — lista todas as configurações (mascara valores secretos)
+- `GET /admin/config/:category` — lista configurações de uma categoria
+- `PUT /admin/config/:category/:key` — atualiza configuração com registro em audit_logs
+- `POST /admin/config` — cria nova configuração com registro em audit_logs
+- `DELETE /admin/config/:category/:key` — remove configuração com registro em audit_logs
+- `POST /admin/config/reload` — invalida o cache
+- Todas as rotas protegidas com `fastify.authorize('superadmin')`
+
+#### Frontend — Tela Super Admin
+- `src/api/admin.js` — 5 funções de API (getConfigs, updateConfig, createConfig, deleteConfig, reloadCache)
+- `src/pages/SuperAdminConfig.jsx` — tela CRUD completa com:
+  - 4 abas de categoria (Storage, Database, Geral, Email)
+  - Formulário de criação de nova configuração
+  - Edição inline com salvamento individual
+  - Exclusão com confirmação
+  - Campos secretos mascarados (`••••••••`) com toggle de visualização
+  - Botão "Recarregar Cache"
+  - Guard de segurança: `user?.role !== 'superadmin'` → bloqueio
+- `src/App.jsx` — rota `/super-admin/configuracoes`
+
+#### Auditoria
+- Toda alteração (create/update/delete) registra em `audit_logs`:
+  - `user_id` — quem fez
+  - `action` — o que foi feito (create_config, update_config, delete_config)
+  - `entity_id` — qual registro (`{category}.{key}`)
+  - `old_value` / `new_value` — diff completo
+  - `ip_address` — IP de origem
+
+#### Usuário Super Admin
+- Usuário `superadmim@wrtec.com.br` criado com role `superadmin`
+- Usuário `admin@portonovo.com` mantém role `admin` (sem acesso ao super admin)
 
 ### Funcionalidades Base (Sprints Anteriores)
 - Autenticação JWT com multi-tenant
-- CRUD completo de produtos, filiais (stores), categorias
+- CRUD completo de produtos (API + frontend com listagem, cadastro, edição, paginação, busca)
+- CRUD completo de filiais (stores) com modal de cadastro/edição
+- CRUD completo de categorias
 - Tela de importação CSV com abas (Ofertas / Filiais / Categorias)
 - Importação de ofertas via CSV com validações (preço, warnings)
 - Importação de filiais via CSV (criação ou atualização por slug)
 - Importação de categorias via CSV
-- Dashboard com métricas básicas + navegação entre páginas
+- Dashboard com métricas básicas
+- Navegação entre páginas (voltar em todas as páginas)
 - Modal de edição de produtos
 - Correção de CORS (PUT, DELETE, PATCH, OPTIONS)
-- Pipeline CI/CD do frontend e da API (git push → build GHCR → webhook Portainer → redeploy)
+- Pipeline CI/CD completo do frontend (git push → build GHCR → webhook Portainer → redeploy)
+- Pipeline CI/CD da API (git push → build GHCR → SSH prisma migrate → webhook Portainer)
 - Portainer Enterprise Edition com Re-pull image e Force redeployment
 - Registry ghcr.io configurado no Portainer
 - Deploy em Docker Swarm com Traefik + Let's Encrypt
 
 ---
 
-## 🗺️ Roadmap de Funcionalidades
+## 🎯 Próximas Fases
 
-| # | Item | Complexidade | Status |
-|---|---|---|---|
-| 1 | Gerenciamento Visual de Ofertas | Média | ✅ Concluído |
-| 2 | Upload de imagens (MinIO S3) | Média | ✅ Concluído |
-| 3 | Dashboard com métricas e gráficos | Média | ✅ Concluído |
-| 4 | Exportação de relatórios | Baixa | ✅ Concluído |
-| 5 | API de integração com ERPs | Alta | ✅ Concluído |
-| **6** | **Configurações da Empresa (Branding + Dados Públicos)** | **Média** | **⬅️ Em andamento** |
-| 7 | Webhook de callback para notificar ERP | Média | ⏸️ Pausado |
-| 8 | Documentação pública Swagger/OpenAPI | Baixa | ⏸️ Pausado |
-| 9 | Site público do cliente (vitrine de ofertas) | Alta | Pendente |
-| 10 | Painel de analytics para o cliente | Média | Pendente |
+### Fase 7 — Tela de Auditoria 🆕
+| Item | Detalhes | Esforço |
+|---|---|---|
+| **Backend** | `GET /admin/audit` — listar logs com paginação, filtros por ação e entity_id | ~30min |
+| **Frontend** | `src/pages/SuperAdminAudit.jsx` — tabela com Data/Hora, Usuário, Ação, Entidade, Valor Antigo, Novo Valor, IP + filtros | ~1h30min |
+| **Rota** | `/super-admin/auditoria` no App.jsx | ~5min |
+| **Total** | | ~2h |
 
-### Detalhamento — Próximas Features
-
-#### 6 — Configurações da Empresa (Branding + Dados Públicos)
-**Complexidade:** Média | **Status:** ⬅️ Em andamento
-Tela de administração para o cliente configurar:
-- Informações gerais da empresa (descrição, contato, endereço)
-- Upload de logo
-- Paleta de cores (pré-preenchida por IA com base na logo)
-- Redes sociais e horários de funcionamento
-- Fonte e identidade visual
-- Preview em tempo real do site público
-
-#### 7 — Webhook de callback
-**Complexidade:** Média | **Status:** ⏸️ Pausado
-Notificar o ERP quando uma importação for processada de forma assíncrona.
-
-#### 8 — Documentação pública da API de Integração
-**Complexidade:** Baixa | **Status:** ⏸️ Pausado
-Gerar documentação Swagger/OpenAPI para o endpoint `/api/v1/integration/import`.
-
-#### 9 — Site público do cliente
-**Complexidade:** Alta
-Portal público onde o consumidor final navega por ofertas, lojas e categorias. Consumirá os dados configurados nas Configurações da Empresa.
-
----
-
-## 🤖 Roadmap de IA
-
-| # | Item | Prioridade | Impacto | Status |
-|---|---|---|---|---|
-| 1 | 🎨 **Extração de paleta de cores a partir da logo** | **Alta** | **Alto** | **⬅️ Em andamento** |
-| 2 | Busca automática de imagens (nome + código de barras) | Média | Alto | Pendente |
-| 3 | Sugestão de categoria por IA | Baixa | Médio | Pendente |
-| 4 | Geração de descrição de produto | Baixa | Médio | Pendente |
-| 5 | Enriquecimento por código de barras (consulta API pública EAN) | Média | Alto | Pendente |
-| 6 | Ofertas inteligentes (preços baseados em histórico) | Alta | Muito Alto | Pendente |
-
-### Detalhamento — Roadmap de IA
-
-#### 1 — Extração de paleta de cores a partir da logo
-Quando o cliente fizer upload da logo, a IA analisa a imagem e extrai as cores dominantes para pré-preencher os campos de paleta (primary, secondary, accent, background, text).
-
-#### 2 — Busca automática de imagens via IA
-Nome + código de barras → busca web → preview no frontend.
-
-#### 3 — Sugestão de categoria por IA
-Sugestão automática baseada no nome do produto.
-
-#### 4 — Geração de descrição de produto
-Descrição automática baseada em nome, categoria e código de barras.
-
-#### 5 — Enriquecimento por código de barras
-Consulta a APIs públicas pelo EAN (marca, fabricante, imagem).
-
-#### 6 — Ofertas inteligentes
-Sugestão de preço promocional baseado em histórico e margem.
+**Backend — `routes/admin.js`:**
+```javascript
+fastify.get('/audit', {
+  preHandler: [fastify.authenticate, fastify.authorize('superadmin')]
+}, async function (request, reply) {
+  const { limit = 50, offset = 0, action, entity_id } = request.query
+  const where = {}
+  if (action) where.action = action
+  if (entity_id) where.entity_id = { contains: entity_id }
+  const [logs, total] = await Promise.all([
+    prisma.audit_logs.findMany({
+      where, orderBy: { created_at: 'desc' },
+      take: Math.min(parseInt(limit), 200), skip: parseInt(offset)
+    }),
+    prisma.audit_logs.count({ where })
+  ])
+  return { logs, total, limit: parseInt(limit), offset: parseInt(offset) }
+})
