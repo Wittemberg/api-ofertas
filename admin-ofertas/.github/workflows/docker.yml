@@ -1,8 +1,8 @@
-name: Build admin image
+name: Build API image
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
 
 permissions:
   contents: read
@@ -13,7 +13,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Baixar código
+        uses: actions/checkout@v4
 
       - name: Login no GHCR
         uses: docker/login-action@v3
@@ -27,8 +28,28 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/wittemberg/admin-ofertas:latest
+          tags: ghcr.io/wittemberg/api-ofertas:latest
 
-      - name: Forçar redeploy no Portainer
+      - name: Apply migrations via SSH no servidor
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 204.157.108.110
+          username: root
+          port: 5822
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            CONTAINER_ID=$(docker ps -q -f ancestor=ghcr.io/wittemberg/api-ofertas:latest | head -1)
+            if [ -z "$CONTAINER_ID" ]; then
+              echo "❌ Container api-ofertas não encontrado pela imagem"
+              echo "▶️ Listando containers disponíveis:"
+              docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
+              exit 1
+            fi
+            echo "✅ Container encontrado: $CONTAINER_ID ($(docker inspect $CONTAINER_ID --format '{{.Name}}'))"
+            docker exec $CONTAINER_ID npx prisma db push --accept-data-loss 2>&1
+            echo "✅ Migrations aplicadas com sucesso"
+
+      - name: 🔄 Forçar redeploy no Portainer
         run: |
-          curl -X POST ${{ secrets.PORTAINER_WEBHOOK_URL_ADMIN }}
+          curl -X POST ${{ secrets.PORTAINER_WEBHOOK_URL }}
+          
