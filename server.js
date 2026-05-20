@@ -35,17 +35,37 @@ app.register(require('./routes/admin'), { prefix: '/admin' });
 app.register(require('./routes/public'), { prefix: '/api/public' });
 
 // ✅ CORRIGIDO: pula verificação de tenant para rotas públicas e de autenticação
+// ✅ FALLBACK: se JWT do usuário contém tenant_id, usa ele em vez do host
 app.addHook("preHandler", async (request, reply) => {
+  // 1. Rotas públicas e de autenticação — pula verificação
   if (request.url.startsWith('/api/public') || request.url.startsWith('/auth')) return;
 
   const host = request.headers.host;
-  const tenant = await prisma.tenants.findFirst({
+
+  // 2. Tenta resolver tenant pelo host (domínio do cliente)
+  const tenant = host ? await prisma.tenants.findFirst({
     where: { domain: host }
-  });
-  if (!tenant) {
-    return reply.code(404).send({ error: "Tenant não encontrado" });
+  }) : null;
+
+  if (tenant) {
+    request.tenant = tenant;
+    return;
   }
-  request.tenant = tenant;
+
+  // 3. ⭐ FALLBACK: se o usuário está autenticado via JWT, usa o tenant_id do token
+  //    Resolve o caso do admin-front que chama api-ofertas.wrtec.com.br diretamente
+  try {
+    await request.jwtVerify();
+    if (request.user?.tenant_id) {
+      request.tenant = { id: request.user.tenant_id };
+      return;
+    }
+  } catch {
+    // Não autenticado — continua para o erro 404 abaixo
+  }
+
+  // 4. Se chegou aqui, não conseguiu resolver o tenant de nenhuma forma
+  return reply.code(404).send({ error: "Tenant não encontrado" });
 });
 
 app.get("/", async (req) => {
