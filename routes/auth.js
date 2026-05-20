@@ -26,22 +26,45 @@ const authPlugin = async function (fastify, opts) {
     return reply.send({ user, token });
   });
 
-  // POST /auth/login
+  // POST /auth/login — ✅ CORRIGIDO: suporte a login sem tenant (admin)
   fastify.post('/login', async function (request, reply) {
     const { email, password } = request.body;
     if (!email || !password) {
       return reply.code(400).send({ error: 'Missing email or password' });
     }
-    const tenant_id = request.tenant.id;
-    const user = await prisma.users.findUnique({
-      where: { tenant_id_email: { tenant_id, email } },
-      select: { id: true, email: true, name: true, role: true, password_hash: true }
+
+    // Fluxo 1: Login via tenant (ex: ofertasportonovo.awecloudsolution.com)
+    if (request.tenant) {
+      const user = await prisma.users.findUnique({
+        where: { tenant_id_email: { tenant_id: request.tenant.id, email } },
+        select: { id: true, email: true, name: true, role: true, password_hash: true }
+      });
+      if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+        return reply.code(401).send({ error: 'Invalid credentials' });
+      }
+      const { password_hash: _, ...safeUser } = user;
+      const token = fastify.jwt.sign({
+        sub: user.id,
+        tenant_id: request.tenant.id,
+        role: user.role
+      });
+      return reply.send({ user: safeUser, token });
+    }
+
+    // Fluxo 2: Login via admin (api-ofertas.wrtec.com.br) — sem tenant
+    const user = await prisma.users.findFirst({
+      where: { email },
+      select: { id: true, email: true, name: true, role: true, password_hash: true, tenant_id: true }
     });
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       return reply.code(401).send({ error: 'Invalid credentials' });
     }
     const { password_hash: _, ...safeUser } = user;
-    const token = fastify.jwt.sign({ sub: user.id, tenant_id, role: user.role });
+    const token = fastify.jwt.sign({
+      sub: user.id,
+      tenant_id: user.tenant_id,
+      role: user.role
+    });
     return reply.send({ user: safeUser, token });
   });
 
@@ -84,12 +107,10 @@ const authPlugin = async function (fastify, opts) {
   }, async function (request, reply) {
     const { label } = request.body;
     if (!label) return reply.code(400).send({ error: 'label é obrigatório' });
-
     const crypto = require('crypto');
     const rawKey = crypto.randomUUID();
     const keyPrefix = rawKey.substring(0, 8);
     const keyHash = await bcrypt.hash(rawKey, 10);
-
     await prisma.api_keys.create({
       data: {
         tenant_id: request.tenant.id,
@@ -99,7 +120,6 @@ const authPlugin = async function (fastify, opts) {
         role: 'integration'
       }
     });
-
     return reply.code(201).send({
       raw_key: rawKey,
       label,
@@ -127,7 +147,6 @@ const authPlugin = async function (fastify, opts) {
       where: { id: request.params.id, tenant_id: request.tenant.id }
     });
     if (!key) return reply.code(404).send({ error: 'Chave não encontrada' });
-
     await prisma.api_keys.update({
       where: { id: key.id },
       data: { is_active: false }

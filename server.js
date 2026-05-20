@@ -12,16 +12,15 @@ app.register(cors, {
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 });
+
 app.register(jwt, { secret: process.env.JWT_SECRET || 'super-secret-key-change-in-production' });
 app.register(multipart);
 
-// Decorators compartilhados (precisa ser ANTES dos registers das rotas)
 const { authenticate, authorize, authenticateApiKey } = require('./lib/auth')(app);
 app.decorate('authenticate', authenticate);
 app.decorate('authorize', authorize);
 app.decorate('authenticateApiKey', authenticateApiKey);
 
-// Route modules
 app.register(require('./routes/auth'), { prefix: '/auth' });
 app.register(require('./routes/products'), { prefix: '/products' });
 app.register(require('./routes/stores'), { prefix: '/stores' });
@@ -35,10 +34,11 @@ app.register(require('./routes/tenant'), { prefix: '/auth' });
 app.register(require('./routes/admin'), { prefix: '/admin' });
 app.register(require('./routes/public'), { prefix: '/api/public' });
 
+// ✅ CORRIGIDO: pula verificação de tenant para rotas públicas e de autenticação
 app.addHook("preHandler", async (request, reply) => {
-  // Pular rotas públicas — identificação do tenant é feita por query param
-  if (request.url.startsWith('/api/public')) return;
-  const host = request.headers.host;  
+  if (request.url.startsWith('/api/public') || request.url.startsWith('/auth')) return;
+
+  const host = request.headers.host;
   const tenant = await prisma.tenants.findFirst({
     where: { domain: host }
   });
@@ -60,16 +60,9 @@ app.post("/imports/csv", async (req, reply) => {
   if (!file) {
     return reply.code(400).send({ error: "Arquivo CSV não enviado" });
   }
-
   const buffer = await file.toBuffer();
   const csvText = buffer.toString("utf-8");
-
-  const rows = parse(csvText, {
-    columns: true,
-    skip_empty_lines: true,
-    trim: true
-  });
-
+  const rows = parse(csvText, { columns: true, skip_empty_lines: true, trim: true });
   const errors = [];
   const warnings = [];
 
@@ -81,27 +74,21 @@ app.post("/imports/csv", async (req, reply) => {
     if (!row.internal_code && !row.barcode) {
       errors.push({ line, message: "Produto sem código interno e sem código de barras" });
     }
-
     if (!row.name) {
       errors.push({ line, message: "Produto sem nome" });
     }
-
     if (!priceTo || priceTo <= 0) {
       errors.push({ line, message: "Preço promocional inválido" });
     }
-
     if (row.price_to && String(row.price_to).includes(",")) {
       warnings.push({ line, message: "Preço com vírgula detectado. Use ponto decimal, exemplo: 19.90." });
     }
-
     if (priceFrom && priceTo > priceFrom) {
       warnings.push({ line, message: "Preço promocional maior que o preço original" });
     }
-
     if (priceFrom && priceTo < priceFrom * 0.4) {
       warnings.push({ line, message: "Preço promocional muito abaixo do preço original. Verifique possível erro de digitação." });
     }
-
     if (priceFrom && priceTo === priceFrom) {
       warnings.push({ line, message: "Preço promocional igual ao preço original" });
     }
@@ -120,7 +107,6 @@ app.post("/imports/csv", async (req, reply) => {
         errors
       }
     });
-
     return reply.code(400).send({
       import_id: importRecord.id,
       status: "failed",
@@ -179,7 +165,13 @@ app.post("/imports/csv", async (req, reply) => {
     const endsAt = row.ends_at ? new Date(row.ends_at) : null;
 
     const existingOffer = await prisma.offers.findFirst({
-      where: { tenant_id: req.tenant.id, store_id: store.id, product_id: product.id, starts_at: startsAt, ends_at: endsAt }
+      where: {
+        tenant_id: req.tenant.id,
+        store_id: store.id,
+        product_id: product.id,
+        starts_at: startsAt,
+        ends_at: endsAt
+      }
     });
 
     const offerData = {
@@ -199,7 +191,6 @@ app.post("/imports/csv", async (req, reply) => {
     } else {
       await prisma.offers.create({ data: offerData });
     }
-
     importedRows += 1;
   }
 
@@ -235,29 +226,19 @@ app.post("/imports/stores", async (req, reply) => {
   }
   const buffer = await file.toBuffer();
   const csvText = buffer.toString("utf-8");
-  const rows = parse(csvText, {
-    columns: true,
-    skip_empty_lines: true,
-    trim: true
-  });
-
+  const rows = parse(csvText, { columns: true, skip_empty_lines: true, trim: true });
   const tenant_id = req.tenant.id;
   let validRows = 0;
   const errors = [];
 
   for (const [index, row] of rows.entries()) {
-    const line = index + 2; // +2 porque linha 1 é header
-
+    const line = index + 2;
     if (!row.name || !row.slug) {
       errors.push({ line, error: "Campos obrigatórios: name, slug" });
       continue;
     }
-
     try {
-      const existing = await prisma.stores.findFirst({
-        where: { slug: row.slug, tenant_id }
-      });
-
+      const existing = await prisma.stores.findFirst({ where: { slug: row.slug, tenant_id } });
       if (existing) {
         await prisma.stores.update({
           where: { id: existing.id },
@@ -284,17 +265,13 @@ app.post("/imports/stores", async (req, reply) => {
           }
         });
       }
-
       validRows++;
     } catch (err) {
       errors.push({ line, error: err.message });
     }
   }
 
-  return {
-    valid_rows: validRows,
-    errors: errors.length > 0 ? errors : undefined
-  };
+  return { valid_rows: validRows, errors: errors.length > 0 ? errors : undefined };
 });
 
 app.post("/imports/categories", async (req, reply) => {
@@ -304,29 +281,19 @@ app.post("/imports/categories", async (req, reply) => {
   }
   const buffer = await file.toBuffer();
   const csvText = buffer.toString("utf-8");
-  const rows = parse(csvText, {
-    columns: true,
-    skip_empty_lines: true,
-    trim: true
-  });
-
+  const rows = parse(csvText, { columns: true, skip_empty_lines: true, trim: true });
   const tenant_id = req.tenant.id;
   let validRows = 0;
   const errors = [];
 
   for (const [index, row] of rows.entries()) {
     const line = index + 2;
-
     if (!row.name || !row.slug) {
       errors.push({ line, error: "Campos obrigatórios: name, slug" });
       continue;
     }
-
     try {
-      const existing = await prisma.categories.findFirst({
-        where: { slug: row.slug, tenant_id }
-      });
-
+      const existing = await prisma.categories.findFirst({ where: { slug: row.slug, tenant_id } });
       if (existing) {
         await prisma.categories.update({
           where: { id: existing.id },
@@ -345,17 +312,13 @@ app.post("/imports/categories", async (req, reply) => {
           }
         });
       }
-
       validRows++;
     } catch (err) {
       errors.push({ line, error: err.message });
     }
   }
 
-  return {
-    valid_rows: validRows,
-    errors: errors.length > 0 ? errors : undefined
-  };
+  return { valid_rows: validRows, errors: errors.length > 0 ? errors : undefined };
 });
 
 app.listen({ port: 3000, host: "0.0.0.0" }, (err) => {
